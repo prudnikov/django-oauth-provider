@@ -20,7 +20,7 @@ class Nonce(models.Model):
     key = models.CharField(max_length=255)
     
     def __unicode__(self):
-        return u"Nonce %s for %s" % (self.key, self.consumer_key)
+        return u"Nonce '%s' for '%s'" % (self.key, self.consumer_key)
 
 
 class Resource(models.Model):
@@ -31,11 +31,11 @@ class Resource(models.Model):
     objects = ResourceManager()
 
     def __unicode__(self):
-        return u"Resource %s with url %s" % (self.name, self.url)
+        return u"Resource '%s' with url '%s'" % (self.name, self.url)
 
 
 class Consumer(models.Model):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=100)
     description = models.TextField()
     
     key = models.CharField(max_length=CONSUMER_KEY_SIZE)
@@ -47,7 +47,7 @@ class Consumer(models.Model):
     objects = ConsumerManager()
         
     def __unicode__(self):
-        return u"Consumer %s with key %s" % (self.name, self.key)
+        return u"Consumer '%s' with key '%s'" % (self.name, self.key)
 
     def generate_random_codes(self):
         """
@@ -69,10 +69,12 @@ class Token(models.Model):
     token_type = models.SmallIntegerField(choices=TOKEN_TYPES)
     timestamp = models.IntegerField(default=long(time()))
     is_approved = models.BooleanField(default=False)
-    
+
     user = models.ForeignKey(User, null=True, blank=True, related_name='tokens')
     consumer = models.ForeignKey(Consumer)
-    
+    # user can give name to the token to differentiate them
+    name = models.CharField(max_length=100, null=True, blank=True, default=None)
+
     ## OAuth 1.0a stuff
     verifier = models.CharField(max_length=VERIFIER_SIZE)
     callback = models.CharField(max_length=MAX_URL_LENGTH, null=True, blank=True)
@@ -81,7 +83,7 @@ class Token(models.Model):
     objects = TokenManager()
     
     def __unicode__(self):
-        return u"%s Token %s for %s" % (self.get_token_type_display(), self.key, self.consumer)
+        return u"'%s' Token '%s' for '%s'" % (self.get_token_type_display(), self.key, self.consumer)
 
     def to_string(self, only_key=False):
         token_dict = {
@@ -123,11 +125,10 @@ class Token(models.Model):
         return self.callback
 
     def set_callback(self, callback):
-        if callback != OUT_OF_BAND: # out of band, says "we can't do this!"
-            if check_valid_callback(callback):
-                self.callback = callback
-                self.callback_confirmed = True
-                self.save()
-            else:
-                raise oauth.Error('Invalid callback URL.')
+        if callback == OUT_OF_BAND or check_valid_callback(callback):
+            self.callback = callback
+            self.callback_confirmed = True
+            self.save()
+        else:
+            raise oauth.Error('Invalid callback URL.')
         
