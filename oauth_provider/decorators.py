@@ -55,6 +55,8 @@ class CheckOAuth(object):
             
             if consumer and token:
                 request.user = token.user
+                request.consumer = consumer
+                request.token = token
                 return self.view_func(request, *args, **kwargs)
         
         return send_oauth_error(Error(_('Invalid request parameters.')))
