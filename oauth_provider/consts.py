@@ -24,3 +24,5 @@ PARAMETERS_NAMES = ('consumer_key', 'token', 'signature',
 OAUTH_PARAMETERS_NAMES = ['oauth_'+s for s in PARAMETERS_NAMES]
 
 OUT_OF_BAND = 'oob'
+
+REQUEST_FILTER_FUNCTION = getattr(settings, 'OAUTH_AUTHENTICATION_MIDDLEWARE_REQUEST_FILTER_FUNCTION', lambda request: request.path[:5] == "/api/")

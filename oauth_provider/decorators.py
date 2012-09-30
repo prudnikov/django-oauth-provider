@@ -1,21 +1,14 @@
-from oauth2 import Error
+from oauth_provider.utils import OAuthChecking, oauth_error_response
 
 try:
     from functools import wraps, update_wrapper
 except ImportError:
     from django.utils.functional import wraps, update_wrapper  # Python 2.3, 2.4 fallback.
 
-from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.utils.translation import ugettext as _
-
-from utils import initialize_server_request, send_oauth_error, get_oauth_request
-from consts import OAUTH_PARAMETERS_NAMES
-from store import store, InvalidTokenError
-
 def oauth_required(view_func=None, resource_name=None):
     return CheckOAuth(view_func, resource_name)
 
-class CheckOAuth(object):
+class CheckOAuth(OAuthChecking):
     """
     Class that checks that the OAuth parameters passes the given test, raising
     an OAuth error otherwise. If the test is passed, the view function
@@ -33,47 +26,14 @@ class CheckOAuth(object):
     def __get__(self, obj, cls=None):
         view_func = self.view_func.__get__(obj, cls)
         return CheckOAuth(view_func, self.resource_name)
-    
+
     def __call__(self, request, *args, **kwargs):
-        if self.is_valid_request(request):
-            oauth_request = get_oauth_request(request)
-            consumer = store.get_consumer(request, oauth_request, 
-                            oauth_request.get_parameter('oauth_consumer_key'))
-            consumer.key = str(consumer.key)
-            consumer.secret = str(consumer.secret)
-            try:
-                token = store.get_access_token(request, oauth_request, 
-                                consumer, oauth_request.get_parameter('oauth_token'))
-                token.key = str(token.key)
-                token.secret = str(token.secret)
-            except InvalidTokenError:
-                return send_oauth_error(Error(_('Invalid access token: %s') % oauth_request.get_parameter('oauth_token')))
-            try:
-                parameters = self.validate_token(request, consumer, token)
-            except Error, e:
-                return send_oauth_error(e)
-            
-            if consumer and token:
-                request.user = token.user
-                request.consumer = consumer
-                request.token = token
-                return self.view_func(request, *args, **kwargs)
-        
-        return send_oauth_error(Error(_('Invalid request parameters.')))
+        error = self.process_oauth_checking(request, *args, **kwargs)
+        if error is None:
+            return self.view_func(request, *args, **kwargs)
+        else:
+            oauth_error_response(error)
 
-    @staticmethod
-    def is_valid_request(request):
-        """
-        Checks whether the required parameters are either in
-        the http-authorization header sent by some clients,
-        which is by the way the preferred method according to
-        OAuth spec, but otherwise fall back to `GET` and `POST`.
-        """
-        is_in = lambda l: all((p in l) for p in OAUTH_PARAMETERS_NAMES)
-        auth_params = request.META.get("HTTP_AUTHORIZATION", [])
-        return is_in(auth_params) or is_in(request.REQUEST)
 
-    @staticmethod
-    def validate_token(request, consumer, token):
-        oauth_server, oauth_request = initialize_server_request(request)
-        return oauth_server.verify_request(oauth_request, consumer, token)
+
+

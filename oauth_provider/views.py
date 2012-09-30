@@ -14,12 +14,12 @@ from django.views.generic.simple import direct_to_template
 from decorators import oauth_required
 from forms import AuthorizeRequestTokenForm
 from store import store, InvalidConsumerError, InvalidTokenError
-from utils import verify_oauth_request, get_oauth_request, require_params, send_oauth_error
+from utils import verify_oauth_request, get_oauth_request, require_params, oauth_error_response
 from consts import OUT_OF_BAND
 
 OAUTH_AUTHORIZE_VIEW = 'OAUTH_AUTHORIZE_VIEW'
 OAUTH_CALLBACK_VIEW = 'OAUTH_CALLBACK_VIEW'
-INVALID_PARAMS_RESPONSE = send_oauth_error(oauth.Error(
+INVALID_PARAMS_RESPONSE = oauth_error_response(oauth.Error(
                                             _('Invalid request parameters.')))
 
 @csrf_exempt
@@ -43,7 +43,7 @@ def request_token(request):
     try:
         request_token = store.create_request_token(request, oauth_request, consumer, oauth_request['oauth_callback'])
     except oauth.Error, err:
-        return send_oauth_error(err)
+        return oauth_error_response(err)
 
     ret = urlencode({
         'oauth_token': request_token.key,
@@ -88,7 +88,7 @@ def user_authorization(request, form_class=AuthorizeRequestTokenForm):
                     raise Exception, "%s view doesn't exist." % callback_view_str
                 response = callback_view(request, **args)
         else:
-            response = send_oauth_error(oauth.Error(_('Action not allowed.')))
+            response = oauth_error_response(oauth.Error(_('Action not allowed.')))
     else:
         # try to get custom authorize view
         authorize_view_str = getattr(settings, OAUTH_AUTHORIZE_VIEW, 

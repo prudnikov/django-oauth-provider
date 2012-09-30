@@ -1,3 +1,4 @@
+from django.utils.translation import ugettext as _
 import oauth2 as oauth
 from urlparse import urlparse
 
@@ -5,6 +6,7 @@ from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest
 
 from consts import MAX_URL_LENGTH, OUT_OF_BAND
+from oauth_provider.consts import OAUTH_PARAMETERS_NAMES
 
 OAUTH_REALM_KEY_NAME = getattr(settings, 'OAUTH_REALM_KEY_NAME', '')
 OAUTH_SIGNATURE_METHODS = getattr(settings, 'OAUTH_SIGNATURE_METHODS', ['plaintext', 'hmac-sha1'])
@@ -46,7 +48,7 @@ def initialize_server_request(request):
         oauth_server = None
     return oauth_server, oauth_request
 
-def send_oauth_error(err=None):
+def oauth_error_response(err=None):
     """Shortcut for sending an error."""
     # send a 401 error
     response = HttpResponse(err.message.encode('utf-8'), mimetype="text/plain")
@@ -119,3 +121,61 @@ def check_valid_callback(callback):
     return (callback_url.scheme
             and callback_url.hostname not in OAUTH_BLACKLISTED_HOSTNAMES
             and len(callback) < MAX_URL_LENGTH)
+
+
+class OAuthChecking(object):
+    def process_oauth_checking(self, request, *args, **kwargs):
+
+        if self.is_valid_request(request):
+            oauth_request = get_oauth_request(request)
+            from store import store, InvalidConsumerError, InvalidTokenError
+            # Retrieve consumer
+            try:
+                consumer = store.get_consumer(request, oauth_request,
+                    oauth_request.get_parameter('oauth_consumer_key'))
+                consumer.key = str(consumer.key)
+                consumer.secret = str(consumer.secret)
+            except InvalidConsumerError:
+                return oauth.Error(_('Invalid consumer: %s') % oauth_request.get_parameter('oauth_consumer_key'))
+#                return oauth_error_response(oauth.Error(_('Invalid consumer: %s') % oauth_request.get_parameter('oauth_consumer_key')))
+
+            # Retrieve access token
+            try:
+                token = store.get_access_token(request, oauth_request,
+                    consumer, oauth_request.get_parameter('oauth_token'))
+                token.key = str(token.key)
+                token.secret = str(token.secret)
+            except InvalidTokenError:
+                return oauth.Error(_('Invalid access token: %s') % oauth_request.get_parameter('oauth_token'))
+#                return oauth_error_response(oauth.Error(_('Invalid access token: %s') % oauth_request.get_parameter('oauth_token')))
+
+            try:
+                parameters = self.validate_token(request, consumer, token)
+            except oauth.Error, e:
+                return e
+#                return oauth_error_response(e)
+
+            if consumer and token:
+                request.user = token.user
+                request.consumer = consumer
+                request.token = token
+            return None
+        return oauth.Error(_('Invalid request parameters.'))
+#        return oauth_error_response(oauth.Error(_('Invalid request parameters.')))
+
+    @staticmethod
+    def is_valid_request(request):
+        """
+        Checks whether the required parameters are either in
+        the http-authorization header sent by some clients,
+        which is by the way the preferred method according to
+        OAuth spec, but otherwise fall back to `GET` and `POST`.
+        """
+        is_in = lambda l: all((p in l) for p in OAUTH_PARAMETERS_NAMES)
+        auth_params = request.META.get("HTTP_AUTHORIZATION", [])
+        return is_in(auth_params) or is_in(request.REQUEST)
+
+    @staticmethod
+    def validate_token(request, consumer, token):
+        oauth_server, oauth_request = initialize_server_request(request)
+        return oauth_server.verify_request(oauth_request, consumer, token)
