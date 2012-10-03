@@ -17,8 +17,9 @@ from store import store, InvalidConsumerError, InvalidTokenError
 from utils import verify_oauth_request, get_oauth_request, require_params, oauth_error_response
 from consts import OUT_OF_BAND
 
-OAUTH_AUTHORIZE_VIEW = 'OAUTH_AUTHORIZE_VIEW'
-OAUTH_CALLBACK_VIEW = 'OAUTH_CALLBACK_VIEW'
+OAUTH_PROVIDER_AUTHORIZE_VIEW = 'OAUTH_PROVIDER_AUTHORIZE_VIEW'
+OAUTH_PROVIDER_CALLBACK_VIEW = 'OAUTH_PROVIDER_CALLBACK_VIEW'
+OAUTH_PROVIDER_OUT_OF_BAND_CALLBACK_VIEW = 'OAUTH_PROVIDER_OUT_OF_BAND_CALLBACK_VIEW'
 INVALID_PARAMS_RESPONSE = oauth_error_response(oauth.Error(
                                             _('Invalid request parameters.')))
 
@@ -72,26 +73,34 @@ def user_authorization(request, form_class=AuthorizeRequestTokenForm):
         if request.session.get('oauth', '') == request_token.key and form.is_valid():
             request.session['oauth'] = ''
             if form.cleaned_data['authorize_access']:
+                request_token.name = form.cleaned_data.get("client_name", getattr(settings, "OAUTH_PROVIDER_TOKEN_DEFAULT_NAME", "Unnamed"))
                 request_token = store.authorize_request_token(request, oauth_request, request_token)
                 args = { 'oauth_token': request_token.key }
             else:
                 args = { 'error': _('Access not granted by user.') }
+
             if request_token.callback is not None and request_token.callback != OUT_OF_BAND:
                 response = HttpResponseRedirect('%s&%s' % (request_token.get_callback_url(), urlencode(args)))
             else:
                 # try to get custom callback view
-                callback_view_str = getattr(settings, OAUTH_CALLBACK_VIEW, 
-                                    'oauth_provider.views.fake_callback_view')
+                if request_token.callback == OUT_OF_BAND:
+                    callback_view_str = getattr(settings, OAUTH_PROVIDER_OUT_OF_BAND_CALLBACK_VIEW,
+                        'oauth_provider.views.fake_out_of_band_callback_view')
+                else:
+                    # try to get custom callback view
+                    callback_view_str = getattr(settings, OAUTH_PROVIDER_CALLBACK_VIEW,
+                        'oauth_provider.views.fake_callback_view')
+
                 try:
                     callback_view = get_callable(callback_view_str)
                 except AttributeError:
                     raise Exception, "%s view doesn't exist." % callback_view_str
-                response = callback_view(request, **args)
+                response = callback_view(request, request_token, **args)
         else:
             response = oauth_error_response(oauth.Error(_('Action not allowed.')))
     else:
         # try to get custom authorize view
-        authorize_view_str = getattr(settings, OAUTH_AUTHORIZE_VIEW, 
+        authorize_view_str = getattr(settings, OAUTH_PROVIDER_AUTHORIZE_VIEW,
                                     'oauth_provider.views.default_authorize_view')
         try:
             authorize_view = get_callable(authorize_view_str)
@@ -153,7 +162,7 @@ def fake_authorize_view(request, token, callback, params):
     """
     Fake view for tests. It must return an ``HttpResponse``.
     
-    You need to define your own in ``settings.OAUTH_AUTHORIZE_VIEW``.
+    You need to define your own in ``settings.OAUTH_PROVIDER_AUTHORIZE_VIEW``.
     """
     return HttpResponse('Fake authorize view for %s with params: %s.' % (token.consumer.name, params))
 
@@ -164,10 +173,24 @@ def default_authorize_view(request, token, callback, params, form_class=Authoriz
         'consumer': token.consumer,
     })
 
-def fake_callback_view(request, **args):
+def default_callback_view(request, token, **kwargs):
+    return direct_to_template(request, 'oauth_provider/callback.html', {
+        'token': token,
+    })
+
+def fake_callback_view(request, token, **args):
     """
     Fake view for tests. It must return an ``HttpResponse``.
     
-    You can define your own in ``settings.OAUTH_CALLBACK_VIEW``.
+    You can define your own in ``settings.OAUTH_PROVIDER_CALLBACK_VIEW``.
     """
     return HttpResponse('Fake callback view.')
+
+
+def default_out_of_bands_callback_view(request, token, **kwargs):
+    return direct_to_template(request, 'oauth_provider/oob_callback.html', {
+        'token': token,
+    })
+
+def fake_out_of_band_callback_view(request, token, **kwargs):
+    return HttpResponse('Fake out of bands callback view.')

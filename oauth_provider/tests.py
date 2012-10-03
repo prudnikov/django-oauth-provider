@@ -67,15 +67,15 @@ URLs::
     The ``oauth`` prefix is not required, you can specify whatever you want.
 
 As a provider, you probably need to customize the view you display to the user
-in order to allow access. The ``OAUTH_AUTHORIZE_VIEW`` setting allow you to
+in order to allow access. The ``OAUTH_PROVIDER_AUTHORIZE_VIEW`` setting allow you to
 specify this view, for instance::
 
     # settings.py
-    OAUTH_AUTHORIZE_VIEW = 'myapp.views.oauth_authorize'
+    OAUTH_PROVIDER_AUTHORIZE_VIEW = 'myapp.views.oauth_authorize'
 
 .. note::
     See example below with a custom callback view (optional), which depends on
-    ``OAUTH_CALLBACK_VIEW`` setting.
+    ``OAUTH_PROVIDER_CALLBACK_VIEW`` setting.
 
 .. note::
     This implementation set an ``oauth`` flag in session which certify that 
@@ -317,7 +317,7 @@ class Test1(TestCase):
 
         # With OAuth 1.0a, the callback argument can be set to "oob" (out-of-band),
         # you can specify your own default callback view with the
-        # ``OAUTH_CALLBACK_VIEW`` setting::
+        # ``OAUTH_PROVIDER_CALLBACK_VIEW`` setting::
 
 #        from oauth_provider.consts import OUT_OF_BAND
         token.callback = OUT_OF_BAND
