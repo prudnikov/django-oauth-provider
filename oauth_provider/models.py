@@ -2,6 +2,7 @@ import uuid
 import urllib
 import urlparse
 from time import time
+import datetime
 import oauth2 as oauth
 
 from django.db import models
@@ -67,7 +68,7 @@ class Token(models.Model):
     key = models.CharField(max_length=KEY_SIZE, null=True, blank=True)
     secret = models.CharField(max_length=SECRET_SIZE, null=True, blank=True)
     token_type = models.SmallIntegerField(choices=TOKEN_TYPES)
-    timestamp = models.IntegerField(default=long(time()))
+    timestamp = models.DateTimeField(default=datetime.datetime.utcnow())
     is_approved = models.BooleanField(default=False)
 
     user = models.ForeignKey(User, null=True, blank=True, related_name='tokens')
