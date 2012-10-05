@@ -68,7 +68,7 @@ class Token(models.Model):
     key = models.CharField(max_length=KEY_SIZE, null=True, blank=True)
     secret = models.CharField(max_length=SECRET_SIZE, null=True, blank=True)
     token_type = models.SmallIntegerField(choices=TOKEN_TYPES)
-    timestamp = models.DateTimeField(default=datetime.datetime.utcnow())
+    datetime = models.DateTimeField(default=datetime.datetime.utcnow())
     is_approved = models.BooleanField(default=False)
 
     user = models.ForeignKey(User, null=True, blank=True, related_name='tokens')

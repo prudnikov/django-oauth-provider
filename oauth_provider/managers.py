@@ -1,3 +1,4 @@
+import datetime
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -36,7 +37,7 @@ class TokenManager(models.Manager):
         """Shortcut to create a token with random key/secret."""
         token, created = self.get_or_create(consumer=consumer, 
                                             token_type=token_type, 
-                                            timestamp=timestamp,
+                                            datetime=datetime.datetime.fromtimestamp(float(timestamp)),
                                             user=user,
                                             callback=callback,
                                             callback_confirmed=callback_confirmed)
