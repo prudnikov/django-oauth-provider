@@ -48,11 +48,17 @@ def initialize_server_request(request):
         oauth_server = None
     return oauth_server, oauth_request
 
-def oauth_error_response(err=None):
+def oauth_error_response(err=None, status_code=401):
     """Shortcut for sending an error."""
     # send a 401 error
-    response = HttpResponse(err.message.encode('utf-8'), mimetype="text/plain")
-    response.status_code = 401
+
+    if isinstance(err, oauth.Error):
+        message = err.message.encode('utf-8')
+    else:
+        message = str(err).encode('utf-8')
+
+    response = HttpResponse(message, mimetype="text/plain")
+    response.status_code = status_code
     # return the authenticate header
     header = oauth.build_authenticate_header(realm=OAUTH_REALM_KEY_NAME)
     for k, v in header.iteritems():

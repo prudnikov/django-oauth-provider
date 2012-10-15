@@ -1,3 +1,4 @@
+import httplib
 from urllib import urlencode
 
 import oauth2 as oauth
@@ -36,10 +37,10 @@ def request_token(request):
     try:
         consumer = store.get_consumer(request, oauth_request, oauth_request['oauth_consumer_key'])
     except InvalidConsumerError:
-        return HttpResponseBadRequest('Invalid Consumer.')
+        return oauth_error_response('Invalid Consumer.', status_code=httplib.BAD_REQUEST)
 
     if not verify_oauth_request(request, oauth_request, consumer):
-        return HttpResponseBadRequest('Could not verify OAuth request.')
+        return oauth_error_response('Could not verify OAuth request.', status_code=httplib.BAD_REQUEST)
 
     try:
         request_token = store.create_request_token(request, oauth_request, consumer, oauth_request['oauth_callback'])
@@ -57,14 +58,14 @@ def request_token(request):
 @login_required
 def user_authorization(request, form_class=AuthorizeRequestTokenForm):
     if 'oauth_token' not in request.REQUEST:
-        return HttpResponseBadRequest('No request token specified.')
+        return oauth_error_response('No request token specified.', status_code=httplib.BAD_REQUEST)
 
     oauth_request = get_oauth_request(request)
 
     try:
         request_token = store.get_request_token(request, oauth_request, request.REQUEST['oauth_token'])
     except InvalidTokenError:
-        return HttpResponseBadRequest('Invalid request token.')
+        return oauth_error_response('Invalid request token.', status_code=httplib.BAD_REQUEST)
 
     consumer = store.get_consumer_for_request_token(request, oauth_request, request_token)
 
@@ -127,20 +128,20 @@ def access_token(request):
     try:
         request_token = store.get_request_token(request, oauth_request, oauth_request['oauth_token'])
     except InvalidTokenError:
-        return HttpResponseBadRequest('Invalid request token.')
+        return oauth_error_response('Invalid request token.', status_code=httplib.BAD_REQUEST)
     try:
         consumer = store.get_consumer(request, oauth_request, oauth_request['oauth_consumer_key'])
     except InvalidConsumerError:
-        return HttpResponseBadRequest('Invalid consumer.')
+        return oauth_error_response('Invalid consumer.', status_code=httplib.BAD_REQUEST)
 
     if not verify_oauth_request(request, oauth_request, consumer, request_token):
-        return HttpResponseBadRequest('Could not verify OAuth request.')
+        return oauth_error_response('Could not verify OAuth request.', status_code=httplib.BAD_REQUEST)
 
     if oauth_request.get('oauth_verifier', None) != request_token.verifier:
-        return HttpResponseBadRequest('Invalid OAuth verifier.')
+        return oauth_error_response('Invalid OAuth verifier.', status_code=httplib.BAD_REQUEST)
 
     if not request_token.is_approved:
-        return HttpResponseBadRequest('Request Token not approved by the user.')
+        return oauth_error_response('Request Token not approved by the user.', status_code=httplib.BAD_REQUEST)
 
     access_token = store.create_access_token(request, oauth_request, consumer, request_token)
 
