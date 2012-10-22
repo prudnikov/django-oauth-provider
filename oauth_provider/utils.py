@@ -31,7 +31,8 @@ def initialize_server_request(request):
     if request.method == "POST" and \
         (request.META.get('CONTENT_TYPE') == "application/x-www-form-urlencoded" \
             or request.META.get('SERVER_NAME') == 'testserver'):
-        parameters = dict((k, v.encode('utf-8')) for (k, v) in request.REQUEST.iteritems())
+
+        parameters = dict((k, request.REQUEST.get(k) if k.startswith("oauth_") else request.REQUEST.getlist(k)) for k in request.REQUEST.iterkeys())
 
     oauth_request = oauth.Request.from_request(request.method, 
                                               request.build_absolute_uri(request.path), 
@@ -70,10 +71,11 @@ def get_oauth_request(request):
     headers = {}
     if 'HTTP_AUTHORIZATION' in request.META:
         headers['Authorization'] = request.META['HTTP_AUTHORIZATION']
-    return oauth.Request.from_request(request.method, 
+    parameters = dict((k, request.REQUEST.get(k) if k.startswith("oauth_") else request.REQUEST.getlist(k)) for k in request.REQUEST.iterkeys())
+    return oauth.Request.from_request(request.method,
                                       request.build_absolute_uri(request.path), 
                                       headers, 
-                                      dict((k, v.encode('utf-8')) for (k, v) in request.REQUEST.iteritems()))
+                                      parameters=parameters)
 
 def verify_oauth_request(request, oauth_request, consumer, token=None):
     """ Helper function to verify requests. """
@@ -143,7 +145,6 @@ class OAuthChecking(object):
                 consumer.secret = str(consumer.secret)
             except InvalidConsumerError:
                 return oauth.Error(_('Invalid consumer: %s') % oauth_request.get_parameter('oauth_consumer_key'))
-#                return oauth_error_response(oauth.Error(_('Invalid consumer: %s') % oauth_request.get_parameter('oauth_consumer_key')))
 
             # Retrieve access token
             try:
@@ -153,21 +154,17 @@ class OAuthChecking(object):
                 token.secret = str(token.secret)
             except InvalidTokenError:
                 return oauth.Error(_('Invalid access token: %s') % oauth_request.get_parameter('oauth_token'))
-#                return oauth_error_response(oauth.Error(_('Invalid access token: %s') % oauth_request.get_parameter('oauth_token')))
 
             try:
                 parameters = self.validate_token(request, consumer, token)
             except oauth.Error, e:
                 return e
-#                return oauth_error_response(e)
-
             if consumer and token:
                 request.user = token.user
                 request.consumer = consumer
                 request.token = token
             return None
         return oauth.Error(_('Invalid request parameters.'))
-#        return oauth_error_response(oauth.Error(_('Invalid request parameters.')))
 
     @staticmethod
     def is_valid_request(request):
